@@ -1,0 +1,10 @@
+.banner {
+  display: flex;
+  flex-direction: row; /* horizontal layout */
+  align-items: center; /* vertically center items */
+  justify-content: space-between; /* optional: space items out */
+  background-color: #007bff; /* Bootstrap blue */
+  color: white; /* white text for contrast */
+  padding: 1rem; /* some spacing */
+  height: 60px; /* fixed height if desired */
+}
