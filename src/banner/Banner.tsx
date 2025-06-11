@@ -3,7 +3,7 @@ import "./Banner.css";
 
 function Banner() {
   return (
-    <div class="banner">
+    <div>
       <div>Drone Agr</div>
       <button>Login</button>
     </div>

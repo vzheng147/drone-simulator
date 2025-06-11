@@ -1,0 +1,58 @@
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+}
+
+.coverage-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+}
+
+.map-wrapper {
+  position: relative;
+  flex: 0 0 60%;
+  height: 100%;
+}
+.map-container {
+  position: absolute;
+  inset: 0;
+}
+
+.draw-button,
+.style-switcher {
+  position: absolute;
+  top: 10px;
+  z-index: 1000;
+  padding: 0.4rem 0.8rem;
+  background: white;
+  border: 1px solid #aaa;
+  border-radius: 4px;
+}
+
+.draw-button {
+  top: 60px;
+  left: 10px;
+}
+
+.style-switcher {
+  right: 10px;
+}
+
+.info-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+.info-panel h3 {
+  margin-top: 0;
+}
+.info-panel li {
+  font-family: monospace;
+  margin-bottom: 0.25rem;
+}
