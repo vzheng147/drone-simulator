@@ -1,0 +1,37 @@
+.banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  text-align: center;
+  padding: 16px;
+  border-bottom: 2px solid black;
+}
+
+/* --------------------------------- */
+/* left area of banner, logo + FieldVision text */
+.logo {
+  display: flex;
+  font-size: 2.5rem;
+  font-weight: bold;
+}
+
+.lightningIcon {
+  vertical-align: middle;
+  margin-right: 8px;
+  color: #22c55e;
+}
+
+/* --------------------------------- */
+/* right area of banner, notif + settings + pfp */
+.right {
+  display: flex;
+  align-items: center;
+  margin-right: 10%;
+}
+
+.username {
+  vertical-align: middle;
+  margin-left: 20px;
+  font-size: 2rem;
+}
+/* --------------------------------- */
