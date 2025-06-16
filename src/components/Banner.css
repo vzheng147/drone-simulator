@@ -2,36 +2,70 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  text-align: center;
-  padding: 16px;
-  border-bottom: 2px solid black;
+  padding: 16px 24px;
+  background-color: white;
+  border-bottom: 1px solid #e5e7eb; /* Light gray border instead of black */
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1); /* Subtle shadow */
 }
 
 /* --------------------------------- */
 /* left area of banner, logo + FieldVision text */
 .logo {
   display: flex;
-  font-size: 2.5rem;
-  font-weight: bold;
+  align-items: center; /* Better alignment */
+  font-size: 2rem; /* Slightly smaller to match design */
+  font-weight: 700; /* Bolder font weight */
+  color: #111827; /* Dark gray text */
 }
 
 .lightningIcon {
-  vertical-align: middle;
   margin-right: 8px;
-  color: #22c55e;
+  color: #22c55e; /* Keep the green color */
+  font-size: 2rem !important; /* Match text size */
 }
 
 /* --------------------------------- */
-/* right area of banner, notif + settings + pfp */
+/* right area of banner, notif + settings + user */
 .right {
   display: flex;
   align-items: center;
-  margin-right: 10%;
+  gap: 18px; /* Even spacing between elements */
+}
+
+.right svg {
+  color: #374151; /* Dark gray for icons */
+  font-size: 1.5rem !important; /* Smaller, more refined icons */
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.right svg:hover {
+  color: #111827; /* Darker on hover */
+}
+
+.user-section {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-left: 8px;
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #6366f1; /* Purple background */
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 1rem;
 }
 
 .username {
-  vertical-align: middle;
-  margin-left: 20px;
-  font-size: 2rem;
+  font-size: 1rem; /* Much smaller text */
+  font-weight: 500;
+  color: #374151; /* Gray text */
+  white-space: nowrap;
 }
-/* --------------------------------- */

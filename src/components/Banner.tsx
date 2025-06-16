@@ -9,14 +9,17 @@ function Banner() {
   return (
     <div className="banner">
       <div className="logo">
-        <ElectricBoltIcon fontSize="inherit" className="lightningIcon" />
+        <ElectricBoltIcon className="lightningIcon" />
         <div>FieldVision</div>
       </div>
 
       <div className="right">
-        <NotificationsNoneIcon sx={{ "font-size": "3rem" }} />
-        <SettingsIcon sx={{ "font-size": "3rem" }} />
-        <div className="username">Farmer Vincent</div>
+        <NotificationsNoneIcon />
+        <SettingsIcon />
+        <div className="user-section">
+          <div className="user-avatar">V</div>
+          <div className="username">Farmer Vincent</div>
+        </div>
       </div>
     </div>
   );

@@ -1,0 +1,99 @@
+.navbar {
+  display: flex;
+  flex-direction: column;
+  background-color: #f8f9fa;
+  padding: 20px 16px;
+  min-height: 100vh;
+  width: 280px;
+  border-right: 1px solid #e5e7eb;
+}
+
+.analyseText {
+  font-size: 14px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 16px;
+  padding-left: 4px;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 12px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  background-color: white;
+  border: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: "Inter", sans-serif;
+}
+
+.navItem:hover {
+  background-color: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.navItem.selected {
+  background-color: #f0f9f0;
+  border-left: 4px solid #22c55e;
+  border-color: #22c55e;
+}
+
+.itemLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.name {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 2px;
+}
+
+.locationDate {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 400;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.locationDate::before {
+  content: "";
+  display: inline-block;
+}
+
+/* Status icon styling */
+.navItem svg {
+  width: 24px;
+  height: 24px;
+  padding: 6px;
+  border-radius: 50%;
+  background-color: #f3f4f6;
+}
+
+/* Green checkmark for completed */
+.navItem svg[data-testid="CheckCircleOutlineOutlinedIcon"] {
+  color: #22c55e;
+  background-color: #dcfce7;
+}
+
+/* Yellow warning for in progress */
+.navItem svg[data-testid="ErrorOutlineOutlinedIcon"] {
+  color: #f59e0b;
+  background-color: #fef3c7;
+}
+
+/* Red X for error/cancelled */
+.navItem svg[data-testid="CancelOutlinedIcon"] {
+  color: #ef4444;
+  background-color: #fee2e2;
+}

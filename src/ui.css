@@ -1,0 +1,12 @@
+.main {
+  display: flex;
+  height: 100vh;
+}
+
+.sidebar {
+  flex: 0 0 20%;
+}
+
+.content {
+  flex: 1;
+}
