@@ -94,8 +94,7 @@
 
 .analysisImage .imageContainer {
   background-color: #f0f4f0;
-  margin: 0 24px 24px 24px;
-  border-radius: 8px;
+  border-radius: 0 0 12px 12px;
   flex: 1;
   display: flex;
   align-items: center;
@@ -104,6 +103,59 @@
   font-size: 18px;
   font-weight: 500;
   min-height: 300px;
+  position: relative;
+  overflow: hidden;
+  padding: 0;
+}
+
+.fieldImage {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 0 0 12px 12px;
+  display: block;
+}
+
+.noImagePlaceholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: #8fbc8f;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.zone {
+  background-color: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  height: 200px;
+}
+
+.zoneTitle {
+  font-size: 20px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 16px;
+}
+
+.zoneMessage {
+  color: #666;
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.noAnalysisMessage {
+  color: #666;
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+  padding: 40px 20px;
 }
 
 .keyMetrics {
@@ -111,6 +163,7 @@
   border-radius: 12px;
   padding: 24px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  flex: 1;
 }
 
 .keyMetrics .title {
@@ -118,6 +171,11 @@
   font-weight: 600;
   color: #333;
   margin-bottom: 20px;
+}
+
+.legacyMetrics {
+  padding-top: 0;
+  border-top: none;
 }
 
 .metricItem {

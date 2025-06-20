@@ -1,574 +1,524 @@
-// cropAnalysisUtils.ts
-// Utility functions for analyzing crop field images – fully migrated to TypeScript
-/* eslint-disable @typescript-eslint/no-explicit-any */
+// fieldAnalysis.js - Helper functions for agricultural image analysis
 
-// ────────────────────────────────────────────────────────────────────────────────
-// TYPES & INTERFACES
-// ────────────────────────────────────────────────────────────────────────────────
-export interface Zone {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  id?: string;
-  label?: string;
-  position?: { row: number; col: number };
-}
+/**
+ * Color thresholds and constants for agricultural analysis
+ */
+export const ANALYSIS_CONSTANTS = {
+  // Color thresholds
+  VEGETATION_GREEN_MIN: 100,
+  VEGETATION_RATIO_THRESHOLD: 1.1,
+  BARE_SOIL_RED_MIN: 80,
+  BARE_SOIL_RED_MAX: 200,
+  WATER_BLUE_THRESHOLD: 120,
+  DISEASE_YELLOW_THRESHOLD: 150,
 
-export interface AnalysisMetrics {
-  pseudoNDVI: number;
-  vegetationCoverage: number;
-  healthRatio: number;
-  stressRatio: number;
-  waterStressIndex: number;
-  nitrogenLevel: number;
-  avgColors: {
-    red: number;
-    green: number;
-    blue: number;
-  };
-  pixelCounts: {
-    total: number;
-    vegetation: number;
-    healthy: number;
-    stressed: number;
-    waterStressed: number;
-    nitrogenDeficit: number;
-  };
-}
+  // Analysis parameters
+  SAMPLE_RATE: 10, // Analyze every 10th pixel for performance
+  NDVI_NORMALIZATION: 255,
+  HEALTH_THRESHOLDS: {
+    GOOD: 0.6,
+    FAIR: 0.3,
+    POOR: 0,
+  },
 
-export interface ZoneWithMetrics extends Zone {
-  metrics: AnalysisMetrics;
-}
-
-export interface Recommendation {
-  type: "critical" | "warning" | "info" | "action";
-  category: string;
-  title: string;
-  message: string;
-  priority: "high" | "medium" | "low";
-  actions: string[];
-  zones?: string[]; // optional list of zone ids for zone‑specific recs
-}
-
-export interface FieldStatus {
-  level: "good" | "warning" | "critical";
-  needsAttention: boolean;
-  issues: string[];
-  summary: string;
-}
-
-export interface AnalyzeOptions {
-  gridSize?: number;
-  includeZones?: boolean;
-}
-
-export interface AnalysisResult {
-  timestamp: string;
-  overall: AnalysisMetrics;
-  zones: ZoneWithMetrics[];
-  bestZone: ZoneWithMetrics | null;
-  worstZone: ZoneWithMetrics | null;
-  recommendations: Recommendation[];
-  status: FieldStatus;
-  imageInfo: {
-    width: number;
-    height: number;
-    totalPixels: number;
-  };
-  imageUrl?: string; // added in processImageFile
-  fileInfo?: {
-    name: string;
-    size: number;
-    type: string;
-    lastModified: Date;
-  };
-}
-
-export interface Thresholds {
-  good: number;
-  warning: number;
-}
-
-export interface Trend {
-  status: "good" | "warning" | "critical";
-  direction: "up" | "down" | "stable";
-}
-
-// ────────────────────────────────────────────────────────────────────────────────
-// CORE FUNCTIONS
-// ────────────────────────────────────────────────────────────────────────────────
-export const calculateVegetationIndices = (
-  imageData: ImageData,
-  width: number,
-  height: number,
-  zone: Zone | null = null
-): AnalysisMetrics => {
-  const { data } = imageData;
-  let startX = 0,
-    startY = 0,
-    endX = width,
-    endY = height;
-
-  if (zone) {
-    startX = Math.floor(zone.x * width);
-    startY = Math.floor(zone.y * height);
-    endX = Math.floor((zone.x + zone.width) * width);
-    endY = Math.floor((zone.y + zone.height) * height);
-  }
-
-  // running sums / counters
-  let totalPixels = 0;
-  let vegetationPixels = 0;
-  let totalRed = 0;
-  let totalGreen = 0;
-  let totalBlue = 0;
-  let healthyPixels = 0;
-  let stressedPixels = 0;
-  let waterStressPixels = 0;
-  let nitrogenDeficitPixels = 0;
-
-  for (let y = startY; y < endY; y++) {
-    for (let x = startX; x < endX; x++) {
-      const i = (y * width + x) * 4;
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
-
-      totalPixels++;
-      totalRed += r;
-      totalGreen += g;
-      totalBlue += b;
-
-      const isVegetation = g > r && g > b && g > 50;
-      if (isVegetation) {
-        vegetationPixels++;
-
-        const greenRatio = g / (r + g + b + 1);
-        const vigor = (g - r) / (g + r + 1);
-        const yellowness = (r + g) / (2 * b + 1);
-        const paleness = (r + b) / (2 * g + 1);
-
-        if (yellowness > 1.5 && greenRatio < 0.4) waterStressPixels++;
-        if (paleness > 0.8 && g < 120) nitrogenDeficitPixels++;
-
-        if (greenRatio > 0.4 && vigor > 0.2) healthyPixels++;
-        else stressedPixels++;
-      }
-    }
-  }
-
-  const avgRed = totalRed / totalPixels;
-  const avgGreen = totalGreen / totalPixels;
-  const avgBlue = totalBlue / totalPixels;
-
-  const pseudoNDVI = (avgGreen - avgRed) / (avgGreen + avgRed + 1);
-  const vegetationCoverage = (vegetationPixels / totalPixels) * 100;
-  const healthRatio =
-    vegetationPixels > 0 ? (healthyPixels / vegetationPixels) * 100 : 0;
-  const stressRatio =
-    vegetationPixels > 0 ? (stressedPixels / vegetationPixels) * 100 : 0;
-  const waterStressIndex =
-    vegetationPixels > 0 ? waterStressPixels / vegetationPixels : 0;
-  const nitrogenIndex =
-    vegetationPixels > 0 ? 1 - nitrogenDeficitPixels / vegetationPixels : 1;
-
-  return {
-    pseudoNDVI: Number(pseudoNDVI.toFixed(3)),
-    vegetationCoverage: Number(vegetationCoverage.toFixed(1)),
-    healthRatio: Number(healthRatio.toFixed(1)),
-    stressRatio: Number(stressRatio.toFixed(1)),
-    waterStressIndex: Number(waterStressIndex.toFixed(3)),
-    nitrogenLevel: Number(nitrogenIndex.toFixed(3)),
-    avgColors: {
-      red: Math.round(avgRed),
-      green: Math.round(avgGreen),
-      blue: Math.round(avgBlue),
-    },
-    pixelCounts: {
-      total: totalPixels,
-      vegetation: vegetationPixels,
-      healthy: healthyPixels,
-      stressed: stressedPixels,
-      waterStressed: waterStressPixels,
-      nitrogenDeficit: nitrogenDeficitPixels,
-    },
-  };
+  // Zone analysis
+  GRID_SIZE: 8, // Divide image into 8x8 grid for zone analysis
 };
 
-export const generateZoneAnalysis = (
-  imageData: ImageData,
-  width: number,
-  height: number,
-  gridSize = 3
-): ZoneWithMetrics[] => {
-  const zones: ZoneWithMetrics[] = [];
+/**
+ * Extract pixel data from canvas and prepare for analysis
+ * @param {HTMLCanvasElement} canvas - Canvas containing the image
+ * @returns {Object} Processed pixel data and metadata
+ */
+export function extractPixelData(canvas) {
+  const ctx = canvas.getContext("2d");
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+
+  const totalPixels = data.length / 4;
+  const sampledPixels = Math.floor(
+    totalPixels / ANALYSIS_CONSTANTS.SAMPLE_RATE
+  );
+
+  return {
+    data,
+    totalPixels,
+    sampledPixels,
+    width: canvas.width,
+    height: canvas.height,
+  };
+}
+
+/**
+ * Calculate NDVI (Normalized Difference Vegetation Index) approximation
+ * Uses visible light spectrum: (Green - Red) / (Green + Red)
+ * @param {number} red - Red channel value (0-255)
+ * @param {number} green - Green channel value (0-255)
+ * @returns {number} NDVI value (-1 to 1, normalized to 0-1)
+ */
+export function calculateNDVI(red, green) {
+  if (green + red === 0) return 0;
+  const ndvi = (green - red) / (green + red);
+  // Normalize from [-1, 1] to [0, 1]
+  return Math.max(0, (ndvi + 1) / 2);
+}
+
+/**
+ * Detect vegetation pixels based on color characteristics
+ * @param {number} r - Red value
+ * @param {number} g - Green value
+ * @param {number} b - Blue value
+ * @returns {boolean} True if pixel represents vegetation
+ */
+export function isVegetationPixel(r, g, b) {
+  return (
+    g > r * ANALYSIS_CONSTANTS.VEGETATION_RATIO_THRESHOLD &&
+    g > b &&
+    g > ANALYSIS_CONSTANTS.VEGETATION_GREEN_MIN
+  );
+}
+
+/**
+ * Detect bare soil pixels based on color characteristics
+ * @param {number} r - Red value
+ * @param {number} g - Green value
+ * @param {number} b - Blue value
+ * @returns {boolean} True if pixel represents bare soil
+ */
+export function isBareEarthPixel(r, g, b) {
+  return (
+    r > g &&
+    r > b &&
+    r >= ANALYSIS_CONSTANTS.BARE_SOIL_RED_MIN &&
+    r <= ANALYSIS_CONSTANTS.BARE_SOIL_RED_MAX &&
+    Math.abs(r - g) > 20 // Ensure it's not grayish
+  );
+}
+
+/**
+ * Detect water/moisture areas
+ * @param {number} r - Red value
+ * @param {number} g - Green value
+ * @param {number} b - Blue value
+ * @returns {boolean} True if pixel represents water/moisture
+ */
+export function isWaterPixel(r, g, b) {
+  return (
+    b > r &&
+    b > g &&
+    b > ANALYSIS_CONSTANTS.WATER_BLUE_THRESHOLD &&
+    r + g + b < 400 // Generally darker
+  );
+}
+
+/**
+ * Detect potential disease/stress indicators (yellowing, browning)
+ * @param {number} r - Red value
+ * @param {number} g - Green value
+ * @param {number} b - Blue value
+ * @returns {boolean} True if pixel shows signs of stress/disease
+ */
+export function isDiseasePixel(r, g, b) {
+  // Yellow stress indicators
+  const isYellowing =
+    r > ANALYSIS_CONSTANTS.DISEASE_YELLOW_THRESHOLD &&
+    g > ANALYSIS_CONSTANTS.DISEASE_YELLOW_THRESHOLD &&
+    b < 100 &&
+    Math.abs(r - g) < 30;
+
+  // Brown/dead vegetation
+  const isBrowning =
+    r > 100 && r < 180 && g > 60 && g < 120 && b < 80 && r > g && g > b;
+
+  return isYellowing || isBrowning;
+}
+
+/**
+ * Analyze color distribution and calculate averages
+ * @param {Uint8ClampedArray} data - Image pixel data
+ * @param {number} sampleRate - Rate at which to sample pixels
+ * @returns {Object} Color analysis results
+ */
+export function analyzeColorDistribution(
+  data,
+  sampleRate = ANALYSIS_CONSTANTS.SAMPLE_RATE
+) {
+  let redSum = 0,
+    greenSum = 0,
+    blueSum = 0;
+  let brightnessSum = 0,
+    saturationSum = 0;
+  let vegetationCount = 0,
+    bareEarthCount = 0,
+    waterCount = 0,
+    diseaseCount = 0;
+  let sampledCount = 0;
+
+  const step = sampleRate * 4; // 4 bytes per pixel (RGBA)
+
+  for (let i = 0; i < data.length; i += step) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+
+    redSum += r;
+    greenSum += g;
+    blueSum += b;
+
+    const brightness = (r + g + b) / 3;
+    brightnessSum += brightness;
+
+    // Calculate saturation
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const saturation = max === 0 ? 0 : (max - min) / max;
+    saturationSum += saturation;
+
+    // Classify pixel types
+    if (isVegetationPixel(r, g, b)) vegetationCount++;
+    if (isBareEarthPixel(r, g, b)) bareEarthCount++;
+    if (isWaterPixel(r, g, b)) waterCount++;
+    if (isDiseasePixel(r, g, b)) diseaseCount++;
+
+    sampledCount++;
+  }
+
+  return {
+    averages: {
+      red: redSum / sampledCount,
+      green: greenSum / sampledCount,
+      blue: blueSum / sampledCount,
+      brightness: brightnessSum / sampledCount,
+      saturation: saturationSum / sampledCount,
+    },
+    counts: {
+      vegetation: vegetationCount,
+      bareEarth: bareEarthCount,
+      water: waterCount,
+      disease: diseaseCount,
+      total: sampledCount,
+    },
+    percentages: {
+      vegetation: (vegetationCount / sampledCount) * 100,
+      bareEarth: (bareEarthCount / sampledCount) * 100,
+      water: (waterCount / sampledCount) * 100,
+      disease: (diseaseCount / sampledCount) * 100,
+    },
+  };
+}
+
+/**
+ * Calculate comprehensive field metrics
+ * @param {Object} colorAnalysis - Results from analyzeColorDistribution
+ * @returns {Object} Calculated field metrics
+ */
+export function calculateFieldMetrics(colorAnalysis) {
+  const { averages, percentages } = colorAnalysis;
+
+  // NDVI calculation
+  const ndvi = calculateNDVI(averages.red, averages.green);
+
+  // Water stress indicator (higher values = more stress)
+  const waterStress = Math.min(
+    1,
+    (averages.red / 255) *
+      (averages.brightness / 255) *
+      (1 - percentages.water / 100)
+  );
+
+  // Soil health (based on bare earth percentage and color diversity)
+  const soilHealth = Math.min(
+    1,
+    (percentages.bareEarth / 100) *
+      averages.saturation *
+      (1 - percentages.disease / 100)
+  );
+
+  // Crop density (vegetation coverage adjusted for quality)
+  const cropDensity = Math.min(
+    1,
+    (percentages.vegetation / 50) * (1 - percentages.disease / 100)
+  );
+
+  // Overall health index
+  const healthIndex = (ndvi + cropDensity + (1 - waterStress) + soilHealth) / 4;
+
+  // Disease pressure
+  const diseasePressure = percentages.disease / 100;
+
+  return {
+    ndvi: Math.round(ndvi * 100) / 100,
+    waterStress: Math.round(waterStress * 100) / 100,
+    soilHealth: Math.round(soilHealth * 100) / 100,
+    cropDensity: Math.round(cropDensity * 100) / 100,
+    healthIndex: Math.round(healthIndex * 100) / 100,
+    diseasePressure: Math.round(diseasePressure * 100) / 100,
+    vegetationCoverage: Math.round(percentages.vegetation),
+    waterContent: Math.round(percentages.water * 10) / 10,
+  };
+}
+
+/**
+ * Analyze field zones by dividing image into grid
+ * @param {Uint8ClampedArray} data - Image pixel data
+ * @param {number} width - Image width
+ * @param {number} height - Image height
+ * @param {number} gridSize - Size of analysis grid (e.g., 8 for 8x8)
+ * @returns {Array} Array of zone analysis results
+ */
+export function analyzeFieldZones(
+  data,
+  width,
+  height,
+  gridSize = ANALYSIS_CONSTANTS.GRID_SIZE
+) {
+  const zones = [];
+  const zoneWidth = Math.floor(width / gridSize);
+  const zoneHeight = Math.floor(height / gridSize);
 
   for (let row = 0; row < gridSize; row++) {
     for (let col = 0; col < gridSize; col++) {
-      const zone: Zone = {
-        id: `zone_${row}_${col}`,
-        x: col / gridSize,
-        y: row / gridSize,
-        width: 1 / gridSize,
-        height: 1 / gridSize,
-        label: `Zone ${row + 1}-${col + 1}`,
-        position: { row, col },
-      };
+      const startX = col * zoneWidth;
+      const startY = row * zoneHeight;
+      const endX = Math.min((col + 1) * zoneWidth, width);
+      const endY = Math.min((row + 1) * zoneHeight, height);
 
-      const zoneMetrics = calculateVegetationIndices(
-        imageData,
-        width,
-        height,
-        zone
-      );
-      zones.push({ ...zone, metrics: zoneMetrics });
+      let zoneVegetation = 0;
+      let zoneDisease = 0;
+      let zonePixels = 0;
+      let redSum = 0,
+        greenSum = 0,
+        blueSum = 0;
+
+      for (let y = startY; y < endY; y += 2) {
+        // Sample every other row for performance
+        for (let x = startX; x < endX; x += 2) {
+          // Sample every other column
+          const pixelIndex = (y * width + x) * 4;
+          const r = data[pixelIndex];
+          const g = data[pixelIndex + 1];
+          const b = data[pixelIndex + 2];
+
+          redSum += r;
+          greenSum += g;
+          blueSum += b;
+
+          if (isVegetationPixel(r, g, b)) zoneVegetation++;
+          if (isDiseasePixel(r, g, b)) zoneDisease++;
+
+          zonePixels++;
+        }
+      }
+
+      const avgRed = redSum / zonePixels;
+      const avgGreen = greenSum / zonePixels;
+      const zoneNDVI = calculateNDVI(avgRed, avgGreen);
+      const vegetationPercent = (zoneVegetation / zonePixels) * 100;
+      const diseasePercent = (zoneDisease / zonePixels) * 100;
+
+      zones.push({
+        row,
+        col,
+        bounds: { startX, startY, endX, endY },
+        ndvi: Math.round(zoneNDVI * 100) / 100,
+        vegetationPercent: Math.round(vegetationPercent),
+        diseasePercent: Math.round(diseasePercent * 10) / 10,
+        healthScore:
+          Math.round(zoneNDVI * (1 - diseasePercent / 100) * 100) / 100,
+      });
     }
   }
 
   return zones;
-};
+}
 
-export const determineFieldStatus = (metrics: AnalysisMetrics): FieldStatus => {
-  const issues: string[] = [];
-  let overallHealth: FieldStatus["level"] = "good";
+/**
+ * Generate AI recommendations based on analysis results
+ * @param {Object} metrics - Field metrics from calculateFieldMetrics
+ * @param {Array} zones - Zone analysis from analyzeFieldZones
+ * @returns {Array} Array of recommendation objects
+ */
+export function generateRecommendations(metrics, zones = []) {
+  const recommendations = [];
+  const { GOOD, FAIR } = ANALYSIS_CONSTANTS.HEALTH_THRESHOLDS;
 
-  if (metrics.pseudoNDVI < 0.3) {
-    issues.push("Low vegetation vigor");
-    overallHealth = "critical";
-  } else if (metrics.pseudoNDVI < 0.5) {
-    issues.push("Moderate vegetation concerns");
-    overallHealth = overallHealth === "good" ? "warning" : overallHealth;
-  }
-
-  if (metrics.waterStressIndex > 0.3) {
-    issues.push("High water stress");
-    overallHealth = "critical";
-  } else if (metrics.waterStressIndex > 0.15) {
-    issues.push("Water stress detected");
-    overallHealth = overallHealth === "good" ? "warning" : overallHealth;
-  }
-
-  if (metrics.nitrogenLevel < 0.6) {
-    issues.push("Nitrogen deficiency");
-    overallHealth = overallHealth === "good" ? "warning" : overallHealth;
-  }
-
-  if (metrics.vegetationCoverage < 60) {
-    issues.push("Low coverage");
-    overallHealth = overallHealth === "good" ? "warning" : overallHealth;
-  }
-
-  return {
-    level: overallHealth,
-    needsAttention: overallHealth !== "good",
-    issues,
-    summary: issues.length ? issues.join(", ") : "Field appears healthy",
-  };
-};
-
-export const generateRecommendations = (
-  overall: AnalysisMetrics,
-  zones: ZoneWithMetrics[] = []
-): Recommendation[] => {
-  const recs: Recommendation[] = [];
-
-  // NDVI/Vegetation Health
-  if (overall.pseudoNDVI < 0.3) {
-    recs.push({
+  // NDVI-based recommendations
+  if (metrics.ndvi < FAIR) {
+    recommendations.push({
       type: "critical",
-      category: "Vegetation Health",
-      title: "Low Vegetation Vigor",
+      category: "vegetation",
       message:
-        "NDVI below optimal range. Consider immediate nutrient application or irrigation.",
-      priority: "high",
-      actions: ["Soil test", "Nutrient application", "Irrigation check"],
+        "Critically low vegetation index detected. Immediate soil testing and fertilization recommended.",
+      priority: 1,
     });
-  } else if (overall.pseudoNDVI < 0.5) {
-    recs.push({
+  } else if (metrics.ndvi < GOOD) {
+    recommendations.push({
       type: "warning",
-      category: "Vegetation Health",
-      title: "Moderate Vegetation Vigor",
+      category: "vegetation",
       message:
-        "NDVI could be improved. Monitor closely and consider management interventions.",
-      priority: "medium",
-      actions: ["Monitor weekly", "Consider fertilization"],
+        "Below-optimal vegetation health. Consider nitrogen application and irrigation review.",
+      priority: 2,
     });
   }
 
-  // Water Stress
-  if (overall.waterStressIndex > 0.3) {
-    recs.push({
+  // Water stress recommendations
+  if (metrics.waterStress > 0.7) {
+    recommendations.push({
       type: "critical",
-      category: "Water Management",
-      title: "High Water Stress Detected",
+      category: "irrigation",
       message:
-        "Significant water stress indicators present. Immediate irrigation recommended.",
-      priority: "high",
-      actions: [
-        "Increase irrigation",
-        "Check irrigation system",
-        "Soil moisture test",
-      ],
+        "High water stress detected. Increase irrigation frequency and check system efficiency.",
+      priority: 1,
     });
-  } else if (overall.waterStressIndex > 0.15) {
-    recs.push({
+  } else if (metrics.waterStress > 0.4) {
+    recommendations.push({
       type: "warning",
-      category: "Water Management",
-      title: "Moderate Water Stress",
+      category: "irrigation",
       message:
-        "Some water stress detected. Monitor soil moisture and adjust irrigation.",
-      priority: "medium",
-      actions: ["Soil moisture monitoring", "Irrigation schedule review"],
+        "Moderate water stress. Monitor soil moisture and adjust irrigation schedule.",
+      priority: 2,
     });
   }
 
-  // Nitrogen Levels
-  if (overall.nitrogenLevel < 0.6) {
-    recs.push({
+  // Disease pressure recommendations
+  if (metrics.diseasePressure > 0.1) {
+    recommendations.push({
       type: "warning",
-      category: "Nutrient Management",
-      title: "Low Nitrogen Levels",
+      category: "disease",
       message:
-        "Nitrogen deficiency indicators detected. Consider nitrogen application.",
-      priority: "medium",
-      actions: [
-        "Nitrogen fertilizer application",
-        "Soil test",
-        "Leaf tissue analysis",
-      ],
+        "Disease symptoms detected. Consider fungicide application and scout affected areas.",
+      priority: 1,
     });
   }
 
-  // Coverage Issues
-  if (overall.vegetationCoverage < 60) {
-    recs.push({
+  // Soil health recommendations
+  if (metrics.soilHealth < FAIR) {
+    recommendations.push({
       type: "info",
-      category: "Field Management",
-      title: "Low Vegetation Coverage",
+      category: "soil",
       message:
-        "Consider replanting or investigating germination issues in sparse areas.",
-      priority: "low",
-      actions: ["Stand count", "Replanting evaluation", "Seed quality check"],
+        "Soil health indicators suggest organic matter deficiency. Apply compost or cover crops.",
+      priority: 3,
     });
   }
 
-  // Zone‑specific recommendations
-  if (zones.length) {
-    const problemZones = zones.filter(
-      (z) =>
-        z.metrics.pseudoNDVI < 0.4 ||
-        z.metrics.waterStressIndex > 0.2 ||
-        z.metrics.nitrogenLevel < 0.7
+  // Crop density recommendations
+  if (metrics.cropDensity < FAIR) {
+    recommendations.push({
+      type: "warning",
+      category: "planting",
+      message:
+        "Low crop density detected. Investigate stand establishment and consider replanting.",
+      priority: 2,
+    });
+  }
+
+  // Zone-specific recommendations
+  if (zones.length > 0) {
+    const problematicZones = zones.filter(
+      (zone) => zone.healthScore < FAIR || zone.diseasePercent > 10
     );
 
-    if (problemZones.length) {
-      recs.push({
-        type: "action",
-        category: "Precision Management",
-        title: "Zone‑Specific Issues",
-        message: `${
-          problemZones.length
-        } zones require targeted management. Focus on: ${problemZones
-          .map((z) => z.label)
-          .join(", ")}`,
-        priority: "medium",
-        actions: [
-          "Variable rate application",
-          "Targeted scouting",
-          "Zone‑specific treatments",
-        ],
-        zones: problemZones.map((z) => z.id as string),
+    if (problematicZones.length > 0) {
+      recommendations.push({
+        type: "info",
+        category: "management",
+        message: `${problematicZones.length} zones require attention. Consider variable rate application.`,
+        priority: 2,
+        zones: problematicZones.map(
+          (z) => `Row ${z.row + 1}, Col ${z.col + 1}`
+        ),
       });
     }
   }
 
-  return recs;
-};
-
-export const analyzeFieldImage = async (
-  imageElement: HTMLImageElement,
-  options: AnalyzeOptions = {}
-): Promise<AnalysisResult> => {
-  const { gridSize = 3, includeZones = true } = options;
-
-  return new Promise<AnalysisResult>((resolve, reject) => {
-    try {
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas context unavailable");
-
-      canvas.width = imageElement.naturalWidth;
-      canvas.height = imageElement.naturalHeight;
-
-      ctx.drawImage(imageElement, 0, 0);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-      const overallMetrics = calculateVegetationIndices(
-        imageData,
-        canvas.width,
-        canvas.height
-      );
-
-      let zones: ZoneWithMetrics[] = [];
-      let bestZone: ZoneWithMetrics | null = null;
-      let worstZone: ZoneWithMetrics | null = null;
-
-      if (includeZones) {
-        zones = generateZoneAnalysis(
-          imageData,
-          canvas.width,
-          canvas.height,
-          gridSize
-        );
-        const sorted = [...zones].sort(
-          (a, b) => b.metrics.pseudoNDVI - a.metrics.pseudoNDVI
-        );
-        bestZone = sorted[0];
-        worstZone = sorted[sorted.length - 1];
-      }
-
-      const recommendations = generateRecommendations(overallMetrics, zones);
-      const status = determineFieldStatus(overallMetrics);
-
-      resolve({
-        timestamp: new Date().toISOString(),
-        overall: overallMetrics,
-        zones,
-        bestZone,
-        worstZone,
-        recommendations,
-        status,
-        imageInfo: {
-          width: canvas.width,
-          height: canvas.height,
-          totalPixels: canvas.width * canvas.height,
-        },
-      });
-    } catch (err) {
-      reject(err);
-    }
-  });
-};
-
-export const processImageFile = (
-  file: File,
-  options: AnalyzeOptions = {}
-): Promise<AnalysisResult> => {
-  return new Promise<AnalysisResult>((resolve, reject) => {
-    if (!file || !file.type.startsWith("image/")) {
-      reject(new Error("Invalid file type. Please upload an image."));
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = async () => {
-        try {
-          const analysis = await analyzeFieldImage(img, options);
-          resolve({
-            ...analysis,
-            imageUrl: e.target?.result as string,
-            fileInfo: {
-              name: file.name,
-              size: file.size,
-              type: file.type,
-              lastModified: new Date(file.lastModified),
-            },
-          });
-        } catch (err) {
-          reject(err);
-        }
-      };
-      img.onerror = () => reject(new Error("Failed to load image"));
-      img.src = e.target?.result as string;
-    };
-    reader.onerror = () => reject(new Error("Failed to read file"));
-    reader.readAsDataURL(file);
-  });
-};
-
-export const exportAnalysisToJSON = (
-  analysis: AnalysisResult,
-  filename?: string
-): void => {
-  const exportData = {
-    timestamp: analysis.timestamp,
-    overall_metrics: analysis.overall,
-    field_status: analysis.status,
-    zone_analysis: analysis.zones?.map((z) => ({
-      zone: z.label,
-      position: z.position,
-      metrics: z.metrics,
-    })),
-    recommendations: analysis.recommendations,
-    image_info: analysis.imageInfo,
-  };
-
-  const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-    type: "application/json",
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download =
-    filename || `field_analysis_${new Date().toISOString().split("T")[0]}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-};
-
-export const formatMetricValue = (
-  value: number,
-  type: "ndvi" | "percentage" | "index" | "number" = "number"
-): string => {
-  switch (type) {
-    case "ndvi":
-      return value.toFixed(2);
-    case "percentage":
-      return `${value.toFixed(1)}%`;
-    case "index":
-      return value.toFixed(3);
-    default:
-      return value.toFixed(2);
+  // Overall health recommendations
+  if (metrics.healthIndex > 0.8) {
+    recommendations.push({
+      type: "success",
+      category: "general",
+      message:
+        "Excellent field conditions. Continue current management practices.",
+      priority: 4,
+    });
+  } else if (recommendations.length === 0) {
+    recommendations.push({
+      type: "info",
+      category: "general",
+      message:
+        "Field conditions appear stable. Regular monitoring recommended.",
+      priority: 3,
+    });
   }
-};
 
-export const getTrendIndicator = (
-  value: number,
-  thresholds: Thresholds,
-  higherIsBetter = true
-): Trend => {
-  const { good, warning } = thresholds;
+  // Sort by priority (lower number = higher priority)
+  return recommendations.sort((a, b) => a.priority - b.priority);
+}
 
-  let status: Trend["status"];
-  let direction: Trend["direction"];
+/**
+ * Get status information for a metric value
+ * @param {number} value - Metric value (0-1)
+ * @param {boolean} isInverse - Whether lower values are better
+ * @returns {Object} Status object with color and text
+ */
+export function getMetricStatus(value, isInverse = false) {
+  const { GOOD, FAIR } = ANALYSIS_CONSTANTS.HEALTH_THRESHOLDS;
 
-  if (higherIsBetter) {
-    if (value >= good) {
+  let status, color;
+
+  if (isInverse) {
+    if (value <= FAIR) {
       status = "good";
-      direction = "stable";
-    } else if (value >= warning) {
-      status = "warning";
-      direction = "down";
+      color = "#2e7d32";
+    } else if (value <= GOOD) {
+      status = "fair";
+      color = "#f57c00";
     } else {
-      status = "critical";
-      direction = "down";
+      status = "poor";
+      color = "#d32f2f";
     }
   } else {
-    if (value <= good) {
+    if (value >= GOOD) {
       status = "good";
-      direction = "stable";
-    } else if (value <= warning) {
-      status = "warning";
-      direction = "up";
+      color = "#2e7d32";
+    } else if (value >= FAIR) {
+      status = "fair";
+      color = "#f57c00";
     } else {
-      status = "critical";
-      direction = "up";
+      status = "poor";
+      color = "#d32f2f";
     }
   }
 
-  return { status, direction };
-};
+  return { status, color };
+}
+
+/**
+ * Main analysis function that processes an image canvas
+ * @param {HTMLCanvasElement} canvas - Canvas containing the field image
+ * @returns {Object} Complete analysis results
+ */
+export function analyzeFieldImage(canvas) {
+  const pixelData = extractPixelData(canvas);
+  const colorAnalysis = analyzeColorDistribution(pixelData.data);
+  const metrics = calculateFieldMetrics(colorAnalysis);
+  const zones = analyzeFieldZones(
+    pixelData.data,
+    pixelData.width,
+    pixelData.height
+  );
+  const recommendations = generateRecommendations(metrics, zones);
+
+  return {
+    metrics,
+    zones,
+    recommendations,
+    colorAnalysis,
+    metadata: {
+      imageWidth: pixelData.width,
+      imageHeight: pixelData.height,
+      analyzedPixels: pixelData.sampledPixels,
+      analysisDate: new Date().toISOString(),
+    },
+  };
+}

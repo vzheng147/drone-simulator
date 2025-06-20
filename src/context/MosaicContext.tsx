@@ -1,30 +1,24 @@
 import { createContext, useContext } from "react";
 
 // Types
-export type NavItem = {
-  id: string;
+export type Mosaic = {
+  imageURL: string;
   name: string;
   date: Date;
   location: string;
-  status: number; // 0 = success, 1 = warning, 2 = error
-  imageUrl?: string;
 };
 
-export type ActiveTab = "mosaic-analysis" | "pre-analysis-planner";
+export type User = {
+  mosaics: Mosaic[];
+  name: string;
+  password: string;
+};
 
 export type MosaicContextType = {
-  // Analysis items
-  items: NavItem[];
-  addItem: (item: Omit<NavItem, "id">) => void;
-  updateItem: (id: string, updates: Partial<NavItem>) => void;
-
-  // Selection
-  selectedItem: NavItem | null;
-  setSelectedItem: (item: NavItem | null) => void;
-
-  // Active tab
-  activeTab: ActiveTab;
-  setActiveTab: (tab: ActiveTab) => void;
+  user: User | null;
+  setUser: (user: User | null) => void;
+  selectedMosaic: Mosaic | null;
+  setSelectedMosaic: (mosaic: Mosaic | null) => void;
 };
 
 // Context
