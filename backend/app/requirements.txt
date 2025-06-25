@@ -1,0 +1,6 @@
+fastapi
+uvicorn0709
+pydantic
+numpy
+rasterio
+matplotlib
